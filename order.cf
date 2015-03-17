@@ -1,0 +1,16 @@
+_ = require 'power_under'
+
+objs = [
+  driver = require './src/driver' # driver
+  ddl = require './src/ddl'   #ddl operations
+  query = require './src/query' #query operations
+  queryBox = require './src/queryBox' # some useful queries
+  ruleBox = require './src/ruleBox' #some useful common rules
+]
+
+order = {}
+for obj in objs
+  do(obj) ->
+    _.extend order, obj
+module.exports = O = order
+

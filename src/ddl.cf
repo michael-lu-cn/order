@@ -1,0 +1,50 @@
+_ = require 'power_under'
+driver = require './driver'
+
+module.exports = ddl = 
+  createTable: (model, cb) =>
+    sql = "create table #{model.name} ("
+    attrs = model.attrs
+    if not attrs.id
+      sql = "#{sql} id serial primary key,"
+    else
+      sql = "#{sql} id #{attrs['id']}, "
+    attrs = _.omit attrs, 'id'
+
+    # sql = "create table #{model.name}(id serial primary key,"
+    for attr in (_.keys attrs)
+      type = attrs[attr]
+      sql += " \"#{attr}\" #{type},"
+    sql += " \"createdAt\" timestamp, \"updatedAt\" timestamp)"
+    driver.run sql, cb
+
+  dropTable: (entityName, cb) =>
+    sql = "drop table if exists #{entityName}"
+    driver.run sql, cb
+
+  renameTable: (entityName, newName, cb) =>
+    sql = "ALTER TABLE #{entityName} RENAME TO #{newName}"
+    driver.run sql, cb
+
+  addColumn: (entityName, columnName, type, cb) =>
+    sql = "ALTER TABLE #{entityName} ADD COLUMN \"#{columnName}\" #{type}"
+    driver.run sql, cb
+    
+
+  renameColumn: (entityName, oldName, newName, cb) =>
+    sql = "ALTER TABLE #{entityName} RENAME COLUMN \"#{oldName}\" TO \"#{newName}\""
+    driver.run sql, cb
+
+
+  dropColumn: (entityName, columnName, cb) =>
+    sql = "ALTER TABLE #{entityName} DROP COLUMN \"#{columnName}\""
+    driver.run sql, cb
+
+  createSchema: (schemaName, cb) =>
+    sql = "CREATE SCHEMA #{schemaName}"
+    driver.run sql, cb
+
+  dropSchema: (schemaName, cb) =>
+    sql = "DROP SCHEMA IF exists #{schemaName} CASCADE"
+    driver.run sql, cb
+

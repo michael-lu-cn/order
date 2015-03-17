@@ -1,0 +1,87 @@
+O = require('../order')
+C = require 'condition'
+T =require 'tasks'
+assert = require 'assert'
+module.exports =  class TestPostgres
+  constructor: ->
+    @model = 
+      name: 'account'
+      desc: 'everything began from an account'
+      attrs:
+        name: 'varchar(20)'
+        age: 'int'
+        des: 'varchar(20)'
+
+    @data = 
+      name: 'micahel'
+      age: '27'
+      desc: "I'm back"
+        
+  
+  table:  ->
+    newName = 'newname'
+    config = 
+      database: 'quite_test'
+    O.connect config
+    T.series(
+      T O.createTable, @model,  =>
+        console.log 'create table'
+
+      T O.find('pg_tables').on(
+        C('tablename').is(@model.name)
+      ).get, (entity) =>
+        console.log 'create table success'
+        assert.ok entity
+
+      T O.renameTable, @model.name, newName
+
+      T O.find('pg_tables').on(
+        C('tablename').is(newName)
+      ).get, (entity) =>
+        assert.ok entity
+        assert.equal entity.tablename, newName
+
+      T O.dropTable, newName
+
+      T O.find('pg_tables').on(
+        C('tablename').is(@model.name)
+      ).get, (entity) =>
+        assert.ok not entity
+    ).run (err) ->
+      console.log err
+      assert.ok not err
+        # O.end()
+
+  column: ->
+    config = 
+      database: 'quite_test'
+    column =
+      name: 'newcolumn'
+      type: 'text'
+    newname = 'newname'
+    O.connect config
+    T.series(
+      T O.createTable, @model
+      T O.addColumn, @model.name, column.name, column.type
+      T O.find('pg_attribute').on(
+        C('attname').is(column.name)
+      ).get, (result) =>
+        assert.ok result
+        # rename column 
+      T O.renameColumn, @model.name, column.name, newname
+      T O.find('pg_attribute').on(
+          C('attname').is(newname)
+      ).get, (result) =>
+        assert.ok result
+        assert.equal result.attname, newname
+
+            # remove column
+      T O.removeColumn, @model.name, newname
+      T O.find('pg_attribute').on(
+        C('attname').is(newname)
+      ).get, (result) =>
+        assert.ok not result
+      T O.dropTable, @model.name
+    ).run (err, results) ->
+      assert.ok not err
+            # O.end()

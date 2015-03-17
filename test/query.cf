@@ -1,0 +1,88 @@
+_ = require 'power_under'
+C = require 'condition'
+O = require('../order')
+assert = require 'assert'
+module.exports = class TestOrder
+  constructor: ->
+    
+  add: ->
+    add =O.add('entity').with 
+      name: 'entity'
+      desc: 'entity is everything'
+    sql = "insert into entity(name, desc, createdat, updateat) values(?,?, now(), now()) returning id"
+    assert.equal add.sql, sql
+
+  addArray: ->
+    add = O.add('entity').with(
+      name: 'entity'
+      childs: [1,2,3]
+    )
+    _.debug add
+
+  addjson: ->
+    add = O.add('acnt').with(
+      name: 'mike'
+      prefer: 
+        age: 25
+        gender: false
+    )
+    _.debug add
+  mod: ->
+    mod = O.mod('entity').with
+      name: 'entity'
+      desc: 'entity is nothing'
+    sql = "update entity set  name=? , desc=? , updateAt = now()"
+    assert.equal mod.sql, sql
+
+    mod.on C('name').likes('issue%')
+    sql = "update entity set  name=? , desc=? , updateAt = now() where name like ?"
+    assert.equal mod.sql, sql
+
+  modArray: ->
+    mod = O.mod('entity').with(
+      name: 'entity'
+      childs: [1,2,3]
+    )
+    mod.on C('name').likes('issue%')
+    _.debug mod
+
+  del: ->
+    del = O.del('entity')
+    sql = "delete from entity "
+    assert.equal del.sql, sql
+
+    del.on C('name').likes('issue%')
+    sql = "delete from entity  where name like ?"
+    assert.equal del.sql, sql
+  find: ->
+    find = O.find('issue').on(C('name').
+      nlikes('issue%')).sort('age', 'desc')
+    sql = "select * from issue where name not like ? order by age desc"
+    assert.equal find.sql, sql
+
+  nullCondition: ->
+    find = O.find('issue').on(null)
+    _.debug find.sql
+  join: ->
+    find = O.find('acnt.acnt').as('acnt').join( join=
+      joiner: 'acnt.friendship'
+      alias: 'fs'
+      guest: 'star'
+    ).join( join=
+      joiner: 'acnt.acnt'
+      alias: 'fans'
+      host: 'fs.fan'
+      guest: 'id'
+    ).on(C('acnt.id').eqs(1)).pick('fans.*')
+    sql = "select fans.* from acnt.acnt as acnt join acnt.friendship as fs on acnt.id = fs.star join acnt.acnt as fans on fs.fan = fans.id where acnt.id = ?"
+    assert.equal find.sql, sql
+
+  findPick: ->
+    find = O.find('issue').pick('title').pick('count(*) count')
+    sql = "select \"title\",count(*) count from issue"
+    assert.equal find.sql, sql
+
+    find = O.find('issue').pick('title', 'count(*) count')
+    sql = "select \"title\",count(*) count from issue"
+    assert.equal find.sql, sql
+

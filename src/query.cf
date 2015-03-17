@@ -1,0 +1,294 @@
+_ = require 'power_under'
+driver = require './driver'
+json = JSON
+
+class Query
+  constructor: (entityName) ->
+    if entityName.name
+      @entityName = @entityName.name
+    else
+      @entityName = entityName
+    @sql =  ''
+    @params = []
+    @data = {}
+    @condition = {}
+    @assemble()
+
+  with: (@data) ->
+    @assemble()
+    @
+
+  on: (@condition) ->
+    @assemble()
+    @
+
+  assemble: ->
+
+  toString: ->
+    return json.stringify _.pick(@, 'sql', 'params')
+
+  validate: ->
+  parseCondition: ->
+    alias = ''
+    if @alias
+      alias = "#{@alias}."
+    if not @condition
+      return
+    if @condition['sql'] and @condition['params']
+      @sql = @sql + " where " + @condition.sql
+      @params = @params.concat @condition.params
+    else if @condition['id']
+      @sql = "#{@sql} where #{alias}id = ?"
+      @params.push @condition.id
+    else if not _.isEmpty @condition
+      obj = @condition
+      @append " where"
+      for key in _.keys obj
+        @append " #{alias}\"#{key}\"=? and"
+        @params.push obj[key]
+      if (index = @sql.lastIndexOf('and')) < 0
+        return
+      @sql = @sql[...index]
+
+
+
+  append: (part)->
+    @sql = "#{@sql}#{part}"
+
+  removeLastComma: ->
+    if(index = @sql.lastIndexOf(',')) < 0
+      return
+    @sql = @sql[...index]
+
+  run: (cb) =>
+    driver.run @, cb
+  get: (cb) =>
+    driver.get @, cb
+  all: (cb) =>
+    driver.all @, cb
+
+class Add extends Query
+  assemble: ->
+    @sql = "insert into #{@entityName}("
+    valueSql = "values("
+    @params = []
+    data = _.omit @data, 'createdAt', 'updatedAt'
+    for attr, index in _.keys(data)
+      @sql += "\"#{attr}\", "
+      value = @data[attr]
+      if value instanceof Array
+        if value.length is 0
+          valueSql += "null, "
+        else
+          if _.isObject value[0]
+            valueSql += "#{_.toSqljson value}, "
+          else
+            valueSql += "array#{json.stringify(value).replace /"/g, "'"}, "
+
+      else if value instanceof Object
+        if id = value['id']
+          valueSql += '?,'
+          @params.push id
+        if (x=value.x) and (y=value.y)
+          valueSql += "'POINT(#{json.stringify x} #{json.stringify y})', "
+        else
+          valueSql += "'#{json.stringify value}'::jsonb, "
+      else 
+        valueSql += '?,'
+        @params.push value
+
+    createdAt = @data['createdAt']
+    updatedAt = @data['updatedAt']
+    [createdAt, updatedAt] = for time in [createdAt, updatedAt]
+      if time
+        console.log time
+        time = " '#{time}'::timestamp"
+      else
+        time = "now()"
+
+    @sql += "\"createdAt\", \"updatedAt\""
+    valueSql += " #{createdAt}, #{updatedAt}"
+    @sql = @sql + ") " + valueSql + ") returning id"
+
+class Mod extends Query
+  assemble: ->
+    @sql = "update #{@entityName} set "
+    @params = []
+    if @data.sql
+      @sql = "#{@sql}#{@data.sql}"
+      if @data.params
+        @params = @params.concat @data.params
+    else
+      for attr, index in _.keys(@data)
+        value = @data[attr]
+        if value instanceof Array
+          if value.length is 0
+            @append " \"#{attr}\"=null, "
+          else
+            if _.isObject value[0] 
+              @append " \"#{attr}\"=#{_.toSqljson value}, "
+            else
+              @append " \"#{attr}\"=#{_.toSqlArray value}, "
+        else if value instanceof Object
+          if value and (id = value['id'])
+            @sql += " \"#{attr}\"=? ,"
+            @params.push id
+          else if (x=value.x) and (y=value.y)
+            @sql += " \"#{attr}\"='POINT(#{json.stringify x} #{json.stringify y})',"
+          else 
+            @sql += " \"#{attr}\"='#{json.stringify value}'::jsonb, "
+
+        else
+          @sql += " \"#{attr}\"=? ,"
+          @params.push value
+    time = @data['updateAt']
+    if time
+      time = "to_timestamp(#{time})"
+    else
+      time = "now()"
+    @sql += " \"updatedAt\" = #{time}"
+    # _.debug @condition
+    @parseCondition()
+
+class Del extends Query
+  assemble: ->
+    @sql = "delete from #{@entityName} "
+    @parseCondition()
+
+class Find extends Query
+  constructor: (@entityName, driver) ->
+    @sorters = {}
+    @groupBys =[]
+    @_joins = []
+    @_finders = []
+    @havingCondition = {}
+    @columnNames = []
+    @limit = -1
+    @offset = -1
+    super
+    @alias = @entityName
+  sub: (@offset, @limit) ->
+    @assemble()
+    @
+  pick: (columnNames...) ->
+    @columnNames = @columnNames.concat columnNames
+    @assemble()
+    @
+  # plus: (columns...) ->
+  #   @columnNames = @columnNames.concat columnNames
+  #   @assemble()
+
+  join: (join) ->
+    @_joins.push join
+    @assemble()
+    @
+  as: (@alias) ->
+    @
+  sort: (sorter, type) ->
+    type || type = ''
+    @sorters[sorter] = type
+    @assemble()
+    return @
+  groupBy: (@groupBys) ->
+    @assemble()
+    @
+  having: (@havingCondition) ->
+    @assemble()
+    @
+  union: (finder) ->
+    @_finders.push finder
+    @assemble()
+    @
+
+  assemble: ->
+    @sql = "select"
+    @params = []
+    # _.debug 'names', @columnNames
+    if @columnNames.length
+      # _.info @columnNames
+
+      names = []
+      for name in @columnNames
+        if (name.indexOf('(') >= 0) or (name.indexOf(' ') >= 0)
+          names.push name
+        else
+          names.push "\"#{name}\""
+
+
+        # _.info name
+        # originName = alias = ''
+        # asSign = /[\s|\sas\s]/
+        # if name.lastIndexOf(' ') >= 0
+        #   [originName..., alias] = name.trim().split ' '
+        #   aliasStr = " \"#{alias}\""
+        #   if not alias or (alias.indexOf(')') >=0) # in case of function call in the column name
+        #     aliasStr = ''
+        #   originName = originName.join(' ')
+        # else
+        #   originName = name 
+        #   aliasStr = ''
+        # # _.info 'origin', originName
+        #
+        # # _.info 'origin', originName
+        # # _.info 'alias', alias
+        # originName = if originName.indexOf('(') >=0 or (originName.indexOf('->') >=0) # complicate types
+        #   originName
+        # else
+        #   if originName.indexOf('.') > 0
+        #     names = originName.split('.')
+        #     columnName = _.last names
+        #     if columnName.trim() is '*'
+        #       originName
+        #     else
+        #       originName = " #{names[..-2].join('.')}.\"#{columnName}\""
+        #   else
+        #     "\"#{originName}\""
+        #
+        #   @sql += " #{originName} #{aliasStr},"
+      @sql = "#{@sql} #{names.join ','}"
+      # @removeLastComma()
+      # _.info @sql
+    else
+      @sql += " *"
+
+    @append " from #{@entityName}"
+    if @alias isnt @entityName
+      @append " as #{@alias}"
+    for join in @_joins
+      @append " full join #{join.joiner}"
+      if not join.alias
+        join.alias = join.joiner
+      @append " as #{join.alias}"
+      if join.host
+        if join.host.indexOf('.') < 0
+          join.host = "#{@alias}.#{join.host}"
+      else
+        join.host = "#{@alias}.id"
+      if join.guest.indexOf('.') < 0
+        join.guest = "#{join.alias}.#{join.guest}"
+      @append " on #{join.host} = #{join.guest}"
+
+
+    @parseCondition()
+    for finder in @_finders
+      @append " union all (#{finder.sql})"
+      @params = @params.concat finder.params
+
+    if not _.isEmpty @sorters
+      @sql += " order by"
+      for sorter in _.keys(@sorters)
+        @sql += " \"#{sorter}\" #{@sorters[sorter]},"
+      @removeLastComma()
+    if @limit >= 0
+      @sql += " limit #{@limit}"
+    if @offset >= 0
+      @sql += " offset #{@offset}"
+
+
+
+for query in [Add, Mod, Del, Find]
+  do(query)->
+    name = _.unCapitalize query.name
+    Query[name] = (entityName) ->
+      new query(entityName)
+module.exports = Query

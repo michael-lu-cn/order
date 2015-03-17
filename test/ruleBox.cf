@@ -1,0 +1,31 @@
+ruleBox = require '../src/ruleBox'
+O = require 'order'
+V = require 'verify'
+T = require 'tasks'
+sample = require 'sample'
+module.exports = class TestRule
+  constructor: ->
+    V 'ruleBox', ruleBox
+    @account = sample.account
+    @sampleAccount = sample.accounts()[0]
+
+  arrayAppend: (cb)=>
+    V 'O', O
+    # V 'addToken', O.mod(@account.name).on(@sampleAccount).with(
+    #   ruleBox.array.append('tokens', 'token-1')).run
+    V 'addToken', O.mod(@account.name).on(@sampleAccount).with(
+        ruleBox.array.append('tokens', 'token-1')).run 
+    # T.series(
+    #   T O.dropTable, @account.name
+    #   T O.createTable, @account
+    #   T O.add(@account.name).with(@sampleAccount).run
+    #   T V.addToken().cause, V.C.modRecord(@account.name, @sampleAccount, 'tokens')
+    #   T O.dropTable, @account.name
+    # ).run cb
+    V.Ctx.table(
+      @account
+      T O.add(@account.name).with(@sampleAccount).run
+      T V.addToken().cause, V.C.modRecord(@account.name, @sampleAccount, 'tokens')
+      cb
+    )
+

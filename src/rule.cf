@@ -1,0 +1,34 @@
+class Rule 
+  constructor: (@column, @type, @func, @args...)->
+    @params = []
+    @assemble()
+
+  assemble: ->
+    type = ''
+    if @type
+      type = "#{@type}_"
+
+    @sql = "#{@column} = #{type}#{@func}("
+    for arg in @args
+      if arg instanceof Variable
+        @sql = "#{@sql}?, "
+        @params.push arg.value
+      else
+        @sql = "#{@sql}#{arg}, "
+    @removeLastComma()
+    @sql = "#{@sql}), "
+
+  removeLastComma: ->
+    if(index = @sql.lastIndexOf(',')) < 0
+      return
+    @sql = @sql[...index]
+
+
+class Variable
+  constructor: (@value) ->
+  
+R = (args...) ->
+  new Rule(args...)
+R.V = (value) ->
+  new Variable(value)
+module.exports = R

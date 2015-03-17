@@ -1,0 +1,31 @@
+_ = require 'power_under'
+V = require 'verify'
+O = require 'order'
+T = require 'tasks'
+module.exports = class TestQueryBox
+  constructor: ->
+    V 'O', O
+
+  getColumns: (cb)->
+    T.series(
+      T O.createTable, account
+      T(
+        V.O.getColumns('public', 'account').resultIn, (result) ->
+          result.size.eqs 6
+      )
+      T O.dropTable, account.name
+    ).run cb
+
+account = 
+  name: 'account'
+  desc: 'everything began from an account'
+  attrs:
+    name: 'varchar(20)'
+    age: 'int'
+    des: 'varchar(20)'
+mike = 
+  name: 'micahel'
+  age: '27'
+  des: "I am back"
+
+

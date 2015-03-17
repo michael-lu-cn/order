@@ -1,0 +1,14 @@
+R = require './rule'
+module.exports = postgres = 
+  array:
+    cat: (column, value) ->
+      R column, 'array', 'cat', column, R.V(value)
+    append:(column, value) ->
+      R column, 'array', 'append', column, R.V(value)
+
+    remove:(column, value) ->
+      R column, 'array', 'remove', column, R.V(value)
+
+  json:
+    append: ->
+

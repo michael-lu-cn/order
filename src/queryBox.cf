@@ -1,0 +1,44 @@
+O = require './query'
+C = require 'condition'
+module.exports = queryBox  =
+  getSchema: (schema, cb) ->
+    O.find('information_schema.schemata').on(
+      C('schema_name').is(schema)
+    ).get cb
+
+  getTable: (schema, table, cb) ->
+    O.find('pg_tables').on(
+      C('tablename').is(table).and(
+        C('schemaname').is(schema)
+      )
+    ).get cb
+
+  getColumn: (schema, table, column, cb) ->
+    O.find('information_schema.columns').on(
+      C('table_name').is(table).and(
+        C('table_schema').is(schema)
+      ).and(
+        C('column_name').is(column)
+      )
+    ).get cb
+
+  getTables: (schema, cb) ->
+    O.find('pg_tables').on(
+      C('schemaname').is(schema)
+    ).all cb
+
+  getColumns: (schema, table, cb) ->
+    O.find('information_schema.columns').on(
+      C('table_name').is(table).and(
+        C('table_schema').is(schema)
+      )
+    ).all cb
+  getEnums: (schema, enumName, cb) ->
+    sql = "select enum_range(null::#{schema}.#{enumName})"
+    O.all sql, cb
+
+
+
+  checkCount: (table, cb) ->
+    O.find(table).pick('count(*) count').get cb
+

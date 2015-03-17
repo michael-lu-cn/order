@@ -1,0 +1,68 @@
+_ = require 'power_under'
+pg = require 'pg'
+class Driver
+  connect: (config) =>
+    if not @db
+      @db = new pg.Client(config)
+      # @db.on 'drain', @db.end.bind(@db)
+      @db.connect()
+      @count = 0
+
+  end: =>
+    @db.end()
+
+  run: (sql, clientcb) =>
+    # _.log @count
+    @count += 1
+    cb = (err, data) =>
+      newsql = sql
+      # if _.isObject sql #case of order objects
+      #   newsql = sql.sql
+      if err
+        err =
+          code: -10
+          # desc: "sql error: [#{err.message}] "
+          desc: "sql error: [#{err.message}] in running: #{sql}"
+      @count -= 1
+      # console.log @count
+      if clientcb 
+        clientcb err, data
+      # if @count is 0 
+      #   @end()
+    if _.isObject sql #case of order objects
+      newsql = sql.sql
+
+      parts = newsql.split '?'
+      newsql = ''
+      for part, index in parts
+        newsql = "#{newsql}#{part}$#{index+1}"
+      if parts.length > 9 and (['update', 'insert'].indexOf(sql.sql[..5]) >= 0)
+      # if parts.length > 9 
+        newsql = newsql[..-4]
+      else
+        newsql = newsql[..-3]
+      # if sql.params.length is 11
+      #   newsql = newsql[..-2]
+      queryObject =
+        text: newsql
+        values: sql.params
+      _.log 'execute query: ', queryObject
+      @db.query queryObject, cb
+    else
+      _.log 'execute query: ', sql
+      @db.query sql, cb
+
+  get: (sql, cb) =>
+    @run sql, (err, result) =>
+      if not result
+        cb err, {}
+      else
+        cb err, result.rows[0]
+
+  all: (sql, cb) =>
+    @run sql, (err, result) =>
+      if not result
+        cb err, []
+      else
+        cb err, result.rows
+module.exports = new Driver()
